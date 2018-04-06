@@ -17,6 +17,8 @@ template <typename X, typename T> auto vectors(X x, T a) { return vector<T>(x, a
 template <typename X, typename Y, typename Z, typename... Zs> auto vectors(X x, Y y, Z z, Zs... zs) { auto cont = vectors(y, z, zs...); return vector<decltype(cont)>(x, cont); }
 template <typename T> ostream & operator << (ostream & out, vector<T> const & xs) { REP (i, int(xs.size()) - 1) out << xs[i] << ' '; if (not xs.empty()) out << xs.back(); return out; }
 
+chrono::high_resolution_clock::time_point clock_begin;
+
 struct site_t {
     vector<int> topics;
     int time_to_index; // to index
@@ -87,32 +89,58 @@ vector<vector<int> > solve(int num_sites, int num_topics, int num_robots, int si
     }
 
     mt19937_64 gen((random_device()()));
-    vector<vector<int> > paths(num_robots);
-    auto get_score = [&]() {
+    auto get_score = [&](vector<vector<int> > const & paths) {
         return compute_score(num_sites, num_topics, num_robots, simu_duration, obso_coeff, sites, freq, sites_with_topic, paths, gen);
     };
 
-    REP (i, num_robots) {
+    auto make_chain = [&]() {
+        vector<int> path;
         while (true) {
             int front = uniform_int_distribution<int>(0, num_sites - 1)(gen);
-            paths[i].push_back(front);
+            path.push_back(front);
             while (true) {
-                int back = paths[i].back();
+                int back = path.back();
                 int j = uniform_int_distribution<int>(0, sites[back].links.size() - 1)(gen);
                 int next = sites[back].links[j];
                 if (next == front) break;
-                paths[i].push_back(next);
+                path.push_back(next);
             }
-            if (paths[i].size() < num_sites) break;
-            paths[i].clear();
+            if (path.size() < num_sites) break;
+            path.clear();
+        }
+        return path;
+    };
+
+    vector<vector<int> > paths(num_robots);
+    REP (robot, num_robots) {
+        paths[robot] = make_chain();
+    }
+    double highscore = get_score(paths);
+    int iteration = 0;
+    for (; ; ++ iteration) {
+        chrono::high_resolution_clock::time_point clock_end = chrono::high_resolution_clock::now();
+        if (chrono::duration_cast<chrono::milliseconds>(clock_end - clock_begin).count() >= 1800) break;
+
+        int robot = uniform_int_distribution<int>(0, num_robots - 1)(gen);
+        vector<int> path = make_chain();
+        paths[robot].swap(path);
+        double score = get_score(paths);
+        if (highscore < score) {
+            highscore = score;
+        } else {
+            paths[robot].swap(path);
         }
     }
 
-    cerr << "estimated score: " << get_score() << endl;
+    cerr << "iteration: " << iteration << endl;
+    cerr << "estimated score: " << highscore << endl;
     return paths;
 }
 
+
 int main() {
+    clock_begin = chrono::high_resolution_clock::now();
+
     // input
     int num_sites; scanf("%d", &num_sites);
     int num_topics; scanf("%d", &num_topics);
