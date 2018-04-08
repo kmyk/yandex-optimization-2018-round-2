@@ -1,7 +1,7 @@
 .PHONY: build
 
 CXX = g++
-CXXFLAGS = -std=c++14 -Wall -O2 -g
+CXXFLAGS = -std=c++14 -Wall -O2 -g -DLOCAL
 
 build: a.out
 a.out: main.cpp

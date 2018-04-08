@@ -135,7 +135,7 @@ vector<vector<int> > solve(int num_sites, int num_topics, int num_robots, int si
     }
 
     xor_shift_128 gen((random_device()()));
-    auto get_score = [&](vector<vector<int> > const & paths) {
+    auto get_score = [&](vector<vector<int> > const & paths, int simu_duration) {
         return compute_score(num_sites, num_topics, num_robots, simu_duration, obso_coeff, sites, freq, sites_with_topic, paths, gen);
     };
 
@@ -172,7 +172,7 @@ vector<vector<int> > solve(int num_sites, int num_topics, int num_robots, int si
                 if (j == path.front()) break;
                 path.push_back(j);
                 used[j] = true;
-                if (path.size() > min(40, num_sites / num_robots)) {
+                if (path.size() > min(30, num_sites / num_robots)) {
                     path.clear();
                     break;
                 }
@@ -194,7 +194,8 @@ vector<vector<int> > solve(int num_sites, int num_topics, int num_robots, int si
     REP (robot, num_robots) {
         paths[robot] = make_chain(get_used(paths));
     }
-    double highscore = get_score(paths);
+    constexpr int MIN_SIMU_DURATION = 10000;
+    double highscore = get_score(paths, MIN_SIMU_DURATION);
     int iteration = 0;
     for (; ; ++ iteration) {
         chrono::high_resolution_clock::time_point clock_end = chrono::high_resolution_clock::now();
@@ -204,7 +205,7 @@ vector<vector<int> > solve(int num_sites, int num_topics, int num_robots, int si
         vector<int> path;
         paths[robot].swap(path);
         paths[robot] = make_chain(get_used(paths));
-        double score = get_score(paths);
+        double score = get_score(paths, MIN_SIMU_DURATION);
         if (highscore < score) {
             highscore = score;
         } else {
@@ -213,7 +214,9 @@ vector<vector<int> > solve(int num_sites, int num_topics, int num_robots, int si
     }
 
     cerr << "iteration: " << iteration << endl;
-    cerr << "estimated score: " << highscore << endl;
+#ifdef LOCAL
+    cerr << "estimated score: " << get_score(paths, simu_duration) << endl;
+#endif
     return paths;
 }
 
