@@ -141,9 +141,9 @@ vector<vector<int> > solve(int num_sites, int num_topics, int num_robots, int si
 
     constexpr int MAX_TIME_TO_INDEX = 1000;
     auto make_chain = [&](vector<bool> used_by_others) {
-        while (true) {
+        for (int iteration = 0; ; ++ iteration) {
             vector<int> path;
-            vector<bool> used = used_by_others;
+            vector<bool> used = iteration < 100 ? used_by_others : vector<bool>(num_sites);
             while (true) {
                 int i = fast_uniform_int_distribution<int>(0, num_sites - 1)(gen);
                 if (used[i]) continue;
@@ -172,7 +172,7 @@ vector<vector<int> > solve(int num_sites, int num_topics, int num_robots, int si
                 if (j == path.front()) break;
                 path.push_back(j);
                 used[j] = true;
-                if (path.size() > 40) {  // magic
+                if (path.size() > min(40, num_sites / num_robots)) {
                     path.clear();
                     break;
                 }
