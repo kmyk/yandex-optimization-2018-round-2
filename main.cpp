@@ -42,6 +42,14 @@ private:
     uint32_t a, b, c, d;
 };
 
+template <class IntType>
+class fast_uniform_int_distribution {
+public:
+    fast_uniform_int_distribution(IntType l, IntType r) : l(l), r(r) {}
+    template <class RandomEngine> IntType operator() (RandomEngine & gen) { return (gen() & 0x7fffffff) % (r - l + 1) + l; }
+private:
+    IntType l, r;
+};
 
 struct site_t {
     vector<int> topics;
@@ -78,7 +86,7 @@ double compute_score(int num_sites, int num_topics, int num_robots, int simu_dur
             bool news_appeared = false;
             while (not news_appeared) {
                 for (int site : sites_with_topic[topic]) {
-                    if (uniform_int_distribution<int>(1, 100)(gen) <= sites[site].news_prob) {
+                    if (fast_uniform_int_distribution<int>(1, 100)(gen) <= sites[site].news_prob) {
                         news_on_site[site].push(events.size() - 1);
                         news_appeared = true;
                     }
@@ -136,7 +144,7 @@ vector<vector<int> > solve(int num_sites, int num_topics, int num_robots, int si
         while (true) {
             vector<int> path;
             vector<bool> used(num_sites);
-            path.push_back(uniform_int_distribution<int>(0, num_sites - 1)(gen));
+            path.push_back(fast_uniform_int_distribution<int>(0, num_sites - 1)(gen));
             while (true) {
                 int i = path.back();
                 int sum_next_time = 0;
@@ -147,7 +155,7 @@ vector<vector<int> > solve(int num_sites, int num_topics, int num_robots, int si
                     path.clear();
                     break;
                 }
-                int acc = uniform_int_distribution<int>(0, sum_next_time - 1)(gen);
+                int acc = fast_uniform_int_distribution<int>(0, sum_next_time - 1)(gen);
                 int j = -1;
                 for (int k : sites[i].links) if (not used[k]) {
                     acc -= MAX_TIME_TO_INDEX / sites[k].time_to_index;
@@ -178,7 +186,7 @@ vector<vector<int> > solve(int num_sites, int num_topics, int num_robots, int si
         chrono::high_resolution_clock::time_point clock_end = chrono::high_resolution_clock::now();
         if (chrono::duration_cast<chrono::milliseconds>(clock_end - clock_begin).count() >= 1800) break;
 
-        int robot = uniform_int_distribution<int>(0, num_robots - 1)(gen);
+        int robot = fast_uniform_int_distribution<int>(0, num_robots - 1)(gen);
         vector<int> path = make_chain();
         paths[robot].swap(path);
         double score = get_score(paths);
