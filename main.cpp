@@ -93,22 +93,41 @@ vector<vector<int> > solve(int num_sites, int num_topics, int num_robots, int si
         return compute_score(num_sites, num_topics, num_robots, simu_duration, obso_coeff, sites, freq, sites_with_topic, paths, gen);
     };
 
+    constexpr int MAX_TIME_TO_INDEX = 1000;
     auto make_chain = [&]() {
-        vector<int> path;
         while (true) {
-            int front = uniform_int_distribution<int>(0, num_sites - 1)(gen);
-            path.push_back(front);
+            vector<int> path;
+            vector<bool> used(num_sites);
+            path.push_back(uniform_int_distribution<int>(0, num_sites - 1)(gen));
             while (true) {
-                int back = path.back();
-                int j = uniform_int_distribution<int>(0, sites[back].links.size() - 1)(gen);
-                int next = sites[back].links[j];
-                if (next == front) break;
-                path.push_back(next);
+                int i = path.back();
+                int sum_next_time = 0;
+                for (int j : sites[i].links) if (not used[j]) {
+                    sum_next_time += MAX_TIME_TO_INDEX / sites[j].time_to_index;
+                }
+                if (sum_next_time == 0) {
+                    path.clear();
+                    break;
+                }
+                int acc = uniform_int_distribution<int>(0, sum_next_time - 1)(gen);
+                int j = -1;
+                for (int k : sites[i].links) if (not used[k]) {
+                    acc -= MAX_TIME_TO_INDEX / sites[k].time_to_index;
+                    if (acc < 0) {
+                        j = k;
+                        break;
+                    }
+                }
+                if (j == path.front()) break;
+                path.push_back(j);
+                used[j] = true;
+                if (path.size() > num_sites / num_robots) {
+                    path.clear();
+                    break;
+                }
             }
-            if (path.size() < num_sites) break;
-            path.clear();
+            if (not path.empty()) return path;
         }
-        return path;
     };
 
     vector<vector<int> > paths(num_robots);
