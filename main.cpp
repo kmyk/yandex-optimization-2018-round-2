@@ -140,11 +140,16 @@ vector<vector<int> > solve(int num_sites, int num_topics, int num_robots, int si
     };
 
     constexpr int MAX_TIME_TO_INDEX = 1000;
-    auto make_chain = [&]() {
+    auto make_chain = [&](vector<bool> used_by_others) {
         while (true) {
             vector<int> path;
-            vector<bool> used(num_sites);
-            path.push_back(fast_uniform_int_distribution<int>(0, num_sites - 1)(gen));
+            vector<bool> used = used_by_others;
+            while (true) {
+                int i = fast_uniform_int_distribution<int>(0, num_sites - 1)(gen);
+                if (used[i]) continue;
+                path.push_back(i);
+                break;
+            }
             while (true) {
                 int i = path.back();
                 int sum_next_time = 0;
@@ -167,7 +172,7 @@ vector<vector<int> > solve(int num_sites, int num_topics, int num_robots, int si
                 if (j == path.front()) break;
                 path.push_back(j);
                 used[j] = true;
-                if (path.size() > num_sites / num_robots) {
+                if (path.size() > 40) {  // magic
                     path.clear();
                     break;
                 }
@@ -175,10 +180,19 @@ vector<vector<int> > solve(int num_sites, int num_topics, int num_robots, int si
             if (not path.empty()) return path;
         }
     };
+    auto get_used = [&](vector<vector<int> > paths) {
+        vector<bool> used(num_sites);
+        for (auto const & path : paths) {
+            for (int i : path) {
+                used[i] = true;
+            }
+        }
+        return used;
+    };
 
     vector<vector<int> > paths(num_robots);
     REP (robot, num_robots) {
-        paths[robot] = make_chain();
+        paths[robot] = make_chain(get_used(paths));
     }
     double highscore = get_score(paths);
     int iteration = 0;
@@ -187,8 +201,9 @@ vector<vector<int> > solve(int num_sites, int num_topics, int num_robots, int si
         if (chrono::duration_cast<chrono::milliseconds>(clock_end - clock_begin).count() >= 1800) break;
 
         int robot = fast_uniform_int_distribution<int>(0, num_robots - 1)(gen);
-        vector<int> path = make_chain();
+        vector<int> path;
         paths[robot].swap(path);
+        paths[robot] = make_chain(get_used(paths));
         double score = get_score(paths);
         if (highscore < score) {
             highscore = score;
