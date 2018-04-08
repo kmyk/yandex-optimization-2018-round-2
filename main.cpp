@@ -19,6 +19,30 @@ template <typename T> ostream & operator << (ostream & out, vector<T> const & xs
 
 chrono::high_resolution_clock::time_point clock_begin;
 
+class xor_shift_128 {
+public:
+    typedef uint32_t result_type;
+    xor_shift_128(uint32_t seed) {
+        set_seed(seed);
+    }
+    void set_seed(uint32_t seed) {
+        a = seed = 1812433253u * (seed ^ (seed >> 30));
+        b = seed = 1812433253u * (seed ^ (seed >> 30)) + 1;
+        c = seed = 1812433253u * (seed ^ (seed >> 30)) + 2;
+        d = seed = 1812433253u * (seed ^ (seed >> 30)) + 3;
+    }
+    uint32_t operator() () {
+        uint32_t t = (a ^ (a << 11));
+        a = b; b = c; c = d;
+        return d = (d ^ (d >> 19)) ^ (t ^ (t >> 8));
+    }
+    static constexpr uint32_t max() { return numeric_limits<result_type>::max(); }
+    static constexpr uint32_t min() { return numeric_limits<result_type>::min(); }
+private:
+    uint32_t a, b, c, d;
+};
+
+
 struct site_t {
     vector<int> topics;
     int time_to_index; // to index
@@ -28,9 +52,11 @@ struct site_t {
 
 template <class RandomEngine>
 double compute_score(int num_sites, int num_topics, int num_robots, int simu_duration, int obso_coeff, vector<site_t> const & sites, vector<int> const & freq, vector<vector<int> > const & sites_with_topic, vector<vector<int> > const & paths, RandomEngine & gen) {
-    double score = 0;
-    vector<pair<int, int> > events;  // (topic, time) ; topic is -1 if already consumed
-    vector<queue<int> > news_on_site(num_sites);
+    reversed_priority_queue<pair<int, int> > news_generation;  // (time, topic)
+    REP (topic, num_topics) {
+        news_generation.emplace(0, topic);
+    }
+
     reversed_priority_queue<tuple<int, int, int> > index_finishes;  // (time, index of robot, index in path)
     REP (robot, num_robots) {
         if (paths[robot].empty()) continue;
@@ -38,9 +64,16 @@ double compute_score(int num_sites, int num_topics, int num_robots, int simu_dur
         index_finishes.emplace(sites[site].time_to_index, robot, 0);
     }
     if (index_finishes.empty()) return 0;
-    REP (cur_time, simu_duration + 1) {
+
+    double score = 0;
+    vector<pair<int, int> > events;  // (topic, time) ; topic is -1 if already consumed
+    vector<queue<int> > news_on_site(num_sites);
+
+    for (int cur_time = 0; cur_time <= simu_duration; ) {
         // generate news
-        REP (topic, num_topics) if (cur_time % freq[topic] == 0) {
+        while (news_generation.top().first == cur_time) {
+            int topic = news_generation.top().second;
+            news_generation.pop();
             events.emplace_back(topic, cur_time);
             bool news_appeared = false;
             while (not news_appeared) {
@@ -51,7 +84,9 @@ double compute_score(int num_sites, int num_topics, int num_robots, int simu_dur
                     }
                 }
             }
+            news_generation.emplace(cur_time + freq[topic], topic);
         }
+
         // indexing
         while (get<0>(index_finishes.top()) == cur_time) {
             int robot = get<1>(index_finishes.top());
@@ -76,6 +111,9 @@ double compute_score(int num_sites, int num_topics, int num_robots, int simu_dur
             int next_site = paths[robot][next_index];
             index_finishes.emplace(cur_time + sites[next_site].time_to_index, robot, next_index);
         }
+
+        // update time
+        cur_time = min(news_generation.top().first, get<0>(index_finishes.top()));
     }
     return 1e4 * score / obso_coeff / num_topics / simu_duration;
 }
@@ -88,7 +126,7 @@ vector<vector<int> > solve(int num_sites, int num_topics, int num_robots, int si
         }
     }
 
-    mt19937_64 gen((random_device()()));
+    xor_shift_128 gen((random_device()()));
     auto get_score = [&](vector<vector<int> > const & paths) {
         return compute_score(num_sites, num_topics, num_robots, simu_duration, obso_coeff, sites, freq, sites_with_topic, paths, gen);
     };
